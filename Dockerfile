@@ -1,4 +1,4 @@
-FROM openresty/openresty:1.27.1.1-0-alpine-fat
+FROM openresty/openresty:1.27.1.2-bookworm-fat
 
 RUN opm get bungle/lua-resty-template
 
