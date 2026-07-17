@@ -1,15 +1,29 @@
-name: Create and publish a Docker image
+name: Test and publish a Docker image
 
 on:
   push:
     branches: ['main']
+  pull_request:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  contract-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run container contract tests
+        run: tests/contract-test.sh
+
   build-and-push-image:
+    if: ${{ github.event_name == 'push' }}
+    needs: contract-test
     runs-on: ubuntu-latest
     permissions:
       contents: read
