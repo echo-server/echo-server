@@ -244,19 +244,31 @@ assert_equal 200 "${http2_status}" 'HTTP/2 GET status'
 assert_file_matches "${http2_body}" 'request_version=2(\.0)?$' 'HTTP/2 protocol echo'
 log 'HTTP/2 GET contract passed'
 
-legacy_host_body="${temporary_directory}/legacy-host.body"
-legacy_host_status="$(curl \
+empty_port_host_body="${temporary_directory}/empty-port-host.body"
+empty_port_host_status="$(curl \
     --http1.1 \
     --silent \
     --show-error \
     --header 'Host: contract.example:' \
-    --output "${legacy_host_body}" \
+    --output "${empty_port_host_body}" \
     --write-out '%{http_code}' \
-    "${base_url}/contract?case=legacy-host")"
+    "${base_url}/contract?case=empty-port-host")"
 
-assert_equal 200 "${legacy_host_status}" 'OpenResty 1.27 malformed Host baseline status'
-assert_file_contains "${legacy_host_body}" 'host=contract.example:' 'OpenResty 1.27 malformed Host baseline echo'
-log 'OpenResty 1.27 malformed Host baseline recorded'
+assert_equal 200 "${empty_port_host_status}" 'empty-port Host compatibility status'
+assert_file_contains "${empty_port_host_body}" 'host=contract.example:' 'empty-port Host compatibility echo'
+log 'Empty-port Host compatibility contract passed'
+
+invalid_port_host_status="$(curl \
+    --http1.1 \
+    --silent \
+    --show-error \
+    --header 'Host: contract.example:80a' \
+    --output /dev/null \
+    --write-out '%{http_code}' \
+    "${base_url}/contract?case=invalid-port-host")"
+
+assert_equal 400 "${invalid_port_host_status}" 'invalid-port Host rejection status'
+log 'Invalid-port Host rejection contract passed'
 
 assert_silent_hang hang-http1 --http1.1
 assert_silent_hang hang-http2 --http2-prior-knowledge
