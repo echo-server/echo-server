@@ -19,7 +19,7 @@ When developing and debugging network applications, understanding the details of
   - Hostname
   - Pod information (if running in a Kubernetes environment)
   - Nginx and Lua versions
-- Provide a long connection test endpoint (/hang)
+- Provide a silent response-timeout test endpoint (`/hang`)
 
 ## Installation and Deployment
 
@@ -82,13 +82,25 @@ curl -X POST -d "Hello World" http://localhost:8080
 curl -H "X-Custom-Header: CustomValue" http://localhost:8080
 ```
 
-### Long Connection Test
+### Response Timeout Test
 
 ```bash
-curl http://localhost:8080/hang
+curl --verbose --max-time 10 http://localhost:8080/hang
 ```
 
-This endpoint keeps the connection open, sending a newline character every 5 seconds.
+This endpoint accepts the request and intentionally sends no response headers or body. The connection remains open until the client closes it, making it useful for verifying that HTTP clients configure a read timeout or an overall request deadline. Without a client-side timeout, the request waits indefinitely by design.
+
+For example, Python Requests will connect successfully and then raise `requests.exceptions.ReadTimeout` after approximately 5 seconds:
+
+```python
+import requests
+
+requests.get("http://localhost:8080/hang", timeout=(3.05, 5))
+```
+
+When the client closes the connection, OpenResty detects the disconnect and cleans up the request handler. While the connection is open, the handler yields to the Nginx event loop rather than blocking a worker thread, though the connection still occupies a socket and request context. Half-open TCP connections where the peer disappears without sending FIN or RST depend on the operating system's TCP keepalive settings for detection.
+
+If `/hang` is exposed through a reverse proxy or load balancer, configure its upstream response timeout accordingly. Otherwise, the intermediary may terminate or retry the request and eventually return a gateway timeout even though Echo Server itself keeps the connection open.
 
 ## Using in Kubernetes
 

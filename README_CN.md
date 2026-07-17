@@ -19,7 +19,7 @@
   - 主机名
   - Pod信息（如果在Kubernetes环境中运行）
   - Nginx和Lua版本
-- 提供长连接测试端点（/hang）
+- 提供静默响应超时测试端点（`/hang`）
 
 ## 安装与部署
 
@@ -82,13 +82,25 @@ curl -X POST -d "Hello World" http://localhost:8080
 curl -H "X-Custom-Header: CustomValue" http://localhost:8080
 ```
 
-### 长连接测试
+### 响应超时测试
 
 ```bash
-curl http://localhost:8080/hang
+curl --verbose --max-time 10 http://localhost:8080/hang
 ```
 
-这个端点会保持连接打开，每5秒发送一个换行符。
+这个端点会接受请求，但故意不发送任何响应头或响应体。连接会一直保持到客户端主动关闭，可用于验证 HTTP 客户端是否正确配置了读取超时或请求整体截止时间。如果客户端没有设置超时，请求会按设计一直等待。
+
+例如，下面的 Python Requests 请求会先成功建立连接，然后在大约 5 秒后抛出 `requests.exceptions.ReadTimeout`：
+
+```python
+import requests
+
+requests.get("http://localhost:8080/hang", timeout=(3.05, 5))
+```
+
+客户端关闭连接后，OpenResty 会检测到断开并清理对应的请求处理器。连接保持期间，请求处理器会让出执行权给 Nginx 事件循环，不会阻塞 worker 线程，但连接本身仍会占用一个 socket 和请求上下文。对于对端未发送 FIN 或 RST 就消失的 TCP 半开连接，检测时间取决于操作系统的 TCP keepalive 配置。
+
+如果通过反向代理或负载均衡器暴露 `/hang`，还需要相应配置其中间层的上游响应超时。否则即使 Echo Server 自身保持连接，中间层也可能终止或重试请求，并最终返回网关超时。
 
 ## 在Kubernetes中使用
 
